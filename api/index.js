@@ -1,3 +1,5 @@
+// failas: api/index.js
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Only POST allowed' });
@@ -28,32 +30,20 @@ export default async function handler(req, res) {
     // NUTRITION
     const nutrition = data?.data?.metrics || [];
     for (const metric of nutrition) {
-      if (['protein', 'carbohydrates', 'total_fat', 'dietary_energy'].includes(metric.name)) {
+      if (["protein", "carbohydrates", "total_fat", "dietary_energy"].includes(metric.name)) {
         result.nutrition[metric.name] = metric.data?.[0]?.qty || 0;
       }
     }
 
     // SLEEP
-    const sleep = nutrition.find((m) => m.name === 'sleep_analysis');
-    if (sleep) {
-      const s = sleep.data?.[0] || {};
-      result.sleep = {
-        totalSleep: s.totalSleep,
-        deep: s.deep,
-        rem: s.rem,
-        core: s.core,
-        awake: s.awake,
-        start: s.sleepStart,
-        end: s.sleepEnd,
-      };
-    }
-
-    res.status(200).json({
-      message: '✅ Duomenys apdoroti',
-      summary: result,
-    });
+    const sleepSessions = data?.data?.sleep_analysis || [];
+    const totalSleepMinutes = sleepSessions.reduce((sum, s) => sum + (s.value || 0), 0);
+    result.sleep.totalMinutes = totalSleepMinutes;
   } catch (e) {
-    console.error('Klaida:', e);
-    res.status(500).json({ error: 'Vidinė serverio klaida', details: e.message });
+    return res.status(500).json({ error: 'Failed to parse health data', details: e.message });
   }
+
+  console.log('Gauti duomenys:', JSON.stringify(data, null, 2));
+
+  return res.status(200).json({ message: '✅ JSON gautas!', parsed: result });
 }
