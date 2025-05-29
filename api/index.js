@@ -1,12 +1,11 @@
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Only POST allowed' });
-  }
+  const data = req.method === "POST" ? req.body : { notice: "GET method test" };
 
-  const data = req.body;
+  console.log("🧠 Gauti duomenys:", JSON.stringify(data, null, 2));
 
-  // 👇 Čia gali daryti ką nori su JSON – išsaugoti, filtruoti, analizuoti
-  console.log("Gauti duomenys:", JSON.stringify(data, null, 2));
-
-  res.status(200).json({ message: '✅ JSON gautas!', receivedKeys: Object.keys(data) });
+  res.status(200).json({
+    message: "✅ Duomenys gauti",
+    method: req.method,
+    receivedKeys: Object.keys(data)
+  });
 }
