@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
   try {
     // WORKOUTS
-    const workouts = data?.data?.workouts || [];
+    const workouts = data?.workouts || [];
     for (const workout of workouts) {
       result.workouts.push({
         name: workout.name,
@@ -28,17 +28,18 @@ export default async function handler(req, res) {
     }
 
     // NUTRITION
-    const nutrition = data?.data?.metrics || [];
-    for (const metric of nutrition) {
+    const metrics = data?.metrics || [];
+    for (const metric of metrics) {
       if (["protein", "carbohydrates", "total_fat", "dietary_energy"].includes(metric.name)) {
         result.nutrition[metric.name] = metric.data?.[0]?.qty || 0;
       }
     }
 
     // SLEEP
-    const sleepSessions = data?.data?.sleep_analysis || [];
+    const sleepSessions = data?.sleep_analysis || [];
     const totalSleepMinutes = sleepSessions.reduce((sum, s) => sum + (s.value || 0), 0);
     result.sleep.totalMinutes = totalSleepMinutes;
+
   } catch (e) {
     return res.status(500).json({ error: 'Failed to parse health data', details: e.message });
   }
