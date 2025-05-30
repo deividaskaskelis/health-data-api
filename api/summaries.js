@@ -5,20 +5,25 @@ const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default async function handler(req, res) {
-  const { from, to } = req.query;
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Only GET allowed' });
+  }
 
   try {
-    let query = supabase.from('summaries').select('*');
+    const from = req.query.from;
+    const to = req.query.to;
+
+    const query = supabase.from('summaries').select('*');
 
     if (from && to) {
-      query = query.gte('date', from).lte('date', to);
+      query.gte('date', from).lte('date', to).order('date', { ascending: true });
     }
-
-    query = query.order('date', { ascending: true });
 
     const { data, error } = await query;
 
-    if (error) throw error;
+    if (error) {
+      throw error;
+    }
 
     return res.status(200).json(data);
   } catch (e) {
