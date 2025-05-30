@@ -35,13 +35,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing date, meal or items' });
     }
 
-    const safeDate = payload.date.slice(0, 10);
+    const safeDate = payload.date.slice(0, 10); // YYYY-MM-DD
+    const jsDate = new Date(safeDate); // Convert to JS Date object
 
     try {
       const { data: existing, error: selectError } = await supabase
         .from('summaries')
         .select('nutrition')
-        .eq('date', safeDate)
+        .eq('date', jsDate)
         .single();
 
       if (selectError && selectError.code !== 'PGRST116') {
@@ -77,15 +78,13 @@ export default async function handler(req, res) {
       };
 
       if (existing) {
-        // 🔍 Debug info
-        console.log('✅ Updating summary for date:', safeDate);
-        console.log('Current existing:', JSON.stringify(existing, null, 2));
+        console.log('✅ Updating summary for date:', jsDate);
         console.log('Nutrition object to update:', JSON.stringify(nutrition, null, 2));
 
         const { error: updateError } = await supabase
           .from('summaries')
           .update({ nutrition })
-          .eq('date', safeDate);
+          .eq('date', jsDate);
 
         if (updateError) throw updateError;
 
@@ -93,7 +92,7 @@ export default async function handler(req, res) {
       } else {
         const { error: insertError } = await supabase.from('summaries').insert([
           {
-            date: safeDate,
+            date: jsDate,
             workouts: [],
             sleep: {},
             nutrition
