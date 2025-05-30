@@ -1,5 +1,9 @@
 let lastSummary = null;
 
+function getDateString(isoString) {
+  return new Date(isoString).toISOString().split('T')[0];
+}
+
 export default async function handler(req, res) {
   console.log('🟢 API function reached');
 
@@ -8,18 +12,17 @@ export default async function handler(req, res) {
   }
 
   const data = req.body;
-  const result = {
-    date: new Date().toISOString().split('T')[0],
-    workouts: [],
-    nutrition: {},
-    sleep: {},
-  };
+  const groupedResults = {};
 
   try {
     // WORKOUTS
     const workouts = data?.data?.workouts || [];
     for (const workout of workouts) {
-      result.workouts.push({
+      const date = getDateString(workout.start);
+      if (!groupedResults[date]) {
+        groupedResults[date] = { date, workouts: [], nutrition: {}, sleep: {} };
+      }
+      groupedResults[date].workouts.push({
         name: workout.name,
         start: workout.start,
         end: workout.end,
@@ -33,39 +36,53 @@ export default async function handler(req, res) {
     const nutrition = data?.data?.metrics || [];
     for (const metric of nutrition) {
       if (["protein", "carbohydrates", "total_fat", "dietary_energy"].includes(metric.name)) {
-        result.nutrition[metric.name] = metric.data?.[0]?.qty || 0;
+        const firstEntry = metric.data?.[0];
+        if (firstEntry?.date) {
+          const date = getDateString(firstEntry.date);
+          if (!groupedResults[date]) {
+            groupedResults[date] = { date, workouts: [], nutrition: {}, sleep: {} };
+          }
+          groupedResults[date].nutrition[metric.name] = firstEntry.qty || 0;
+        }
       }
     }
 
     // SLEEP
     const sleepSessions = data?.data?.sleep_analysis || [];
-    const totalSleepMinutes = sleepSessions.reduce((sum, s) => sum + (s.value || 0), 0);
-    result.sleep.totalMinutes = totalSleepMinutes;
+    for (const session of sleepSessions) {
+      const date = getDateString(session.date || session.start);
+      if (!groupedResults[date]) {
+        groupedResults[date] = { date, workouts: [], nutrition: {}, sleep: {} };
+      }
+      groupedResults[date].sleep.totalMinutes = (groupedResults[date].sleep.totalMinutes || 0) + (session.value || 0);
+    }
 
-    // SUPABASE INSERT
-    await fetch(`${process.env.SUPABASE_URL}/rest/v1/summaries`, {
-      method: 'POST',
-      headers: {
-        'apikey': process.env.SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal',
-      },
-      body: JSON.stringify({
-        date: result.date,
-        workouts: result.workouts,
-        nutrition: result.nutrition,
-        sleep: result.sleep,
-      }),
-    });
+    // SIUNTIMAS Į SUPABASE
+    for (const day of Object.values(groupedResults)) {
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/summaries`, {
+        method: 'POST',
+        headers: {
+          'apikey': process.env.SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
+          date: day.date,
+          workouts: day.workouts,
+          nutrition: day.nutrition,
+          sleep: day.sleep,
+        }),
+      });
+    }
 
   } catch (e) {
     console.error('💥 INSERT ERROR:', e);
     return res.status(500).json({ error: 'Failed to parse or insert health data', details: e.message });
   }
 
-  lastSummary = result;
-  return res.status(200).json({ message: '✅ JSON gautas ir įrašytas į DB', parsed: result });
+  lastSummary = groupedResults;
+  return res.status(200).json({ message: '✅ Duomenys įrašyti per kelias datas', parsed: groupedResults });
 }
 
 export async function getLastSummary(req, res) {
