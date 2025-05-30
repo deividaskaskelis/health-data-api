@@ -1,4 +1,3 @@
-// pages/api/summaries.js
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -36,11 +35,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing date, meal or items' });
     }
 
+    const safeDate = payload.date.slice(0, 10); // apkarpom, kad būtų YYYY-MM-DD
+
     try {
       const { data: existing, error: selectError } = await supabase
         .from('summaries')
         .select('nutrition')
-        .eq('date', payload.date)
+        .eq('date', safeDate)
         .single();
 
       if (selectError && selectError.code !== 'PGRST116') {
@@ -79,7 +80,7 @@ export default async function handler(req, res) {
         const { error: updateError } = await supabase
           .from('summaries')
           .update({ nutrition })
-          .eq('date', payload.date);
+          .eq('date', safeDate);
 
         if (updateError) throw updateError;
 
@@ -87,7 +88,7 @@ export default async function handler(req, res) {
       } else {
         const { error: insertError } = await supabase.from('summaries').insert([
           {
-            date: payload.date,
+            date: safeDate,
             workouts: [],
             sleep: {},
             nutrition
