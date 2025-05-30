@@ -10,14 +10,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Only POST allowed' });
   }
 
-  const payload = req.body?.data;
+  const payload = req.body;
 
   if (!payload || !payload.date || !payload.nutrition) {
     return res.status(400).json({ error: 'Missing date or nutrition data' });
   }
 
   try {
-    // Check if summary exists
     const { data: existing, error: selectError } = await supabase
       .from('summaries')
       .select('*')
@@ -29,7 +28,6 @@ export default async function handler(req, res) {
     }
 
     if (existing) {
-      // Update nutrition
       const { error: updateError } = await supabase
         .from('summaries')
         .update({ nutrition: payload.nutrition })
@@ -39,7 +37,6 @@ export default async function handler(req, res) {
 
       return res.status(200).json({ message: 'Nutrition updated' });
     } else {
-      // Insert new with fallback for other fields
       const { error: insertError } = await supabase.from('summaries').insert([
         {
           date: payload.date,
