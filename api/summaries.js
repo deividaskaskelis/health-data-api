@@ -9,17 +9,16 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Only GET allowed' });
   }
 
-  try {
-    const from = req.query.from;
-    const to = req.query.to;
+  const { from, to } = req.query;
 
-    const query = supabase.from('summaries').select('*');
+  try {
+    let query = supabase.from('summaries').select('*');
 
     if (from && to) {
-      query.gte('date', from).lte('date', to).order('date', { ascending: true });
+      query = query.gte('date', from).lte('date', to);
     }
 
-    const { data, error } = await query;
+    const { data, error } = await query.order('date', { ascending: true });
 
     if (error) {
       throw error;
