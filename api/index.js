@@ -1,6 +1,8 @@
 let lastSummary = null;
 
 export default async function handler(req, res) {
+  console.log('🟢 API function reached');
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Only POST allowed' });
   }
@@ -40,8 +42,8 @@ export default async function handler(req, res) {
     const totalSleepMinutes = sleepSessions.reduce((sum, s) => sum + (s.value || 0), 0);
     result.sleep.totalMinutes = totalSleepMinutes;
 
-    // 🔽 SUPABASE INSERT
-    await fetch('https://YOUR_PROJECT_ID.supabase.co/rest/v1/summaries', {
+    // SUPABASE INSERT
+    await fetch(`${process.env.SUPABASE_URL}/rest/v1/summaries`, {
       method: 'POST',
       headers: {
         'apikey': process.env.SUPABASE_ANON_KEY,
@@ -58,6 +60,7 @@ export default async function handler(req, res) {
     });
 
   } catch (e) {
+    console.error('💥 INSERT ERROR:', e);
     return res.status(500).json({ error: 'Failed to parse or insert health data', details: e.message });
   }
 
