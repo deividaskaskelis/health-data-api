@@ -1,31 +1,105 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
 
 export default async function handler(req, res) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Only GET allowed' });
+  if (req.method === 'GET') {
+    const { from, to } = req.query;
+
+    try {
+      let query = supabase.from('summaries').select('*');
+
+      if (from && to) {
+        query = query.gte('date', from).lte('date', to);
+      }
+
+      const { data, error } = await query.order('date', { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      return res.status(200).json(data);
+    } catch (e) {
+      return res.status(500).json({ error: 'Supabase query failed', details: e.message });
+    }
   }
 
-  const { from, to } = req.query;
+  if (req.method === 'POST') {
+    const payload = req.body?.data;
 
-  try {
-    let query = supabase.from('summaries').select('*');
-
-    if (from && to) {
-      query = query.gte('date', from).lte('date', to);
+    if (!payload || !payload.date || !payload.meal || !payload.items) {
+      return res.status(400).json({ error: 'Missing date, meal or items' });
     }
 
-    const { data, error } = await query.order('date', { ascending: true });
+    try {
+      const { data: existing, error: selectError } = await supabase
+        .from('summaries')
+        .select('nutrition')
+        .eq('date', payload.date)
+        .single();
 
-    if (error) {
-      throw error;
+      if (selectError && selectError.code !== 'PGRST116') {
+        throw selectError;
+      }
+
+      const newMeal = {
+        name: payload.meal,
+        items: payload.items
+      };
+
+      let updatedMeals = [];
+      let updatedTotals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+
+      if (existing && existing.nutrition && existing.nutrition.meals) {
+        updatedMeals = [...existing.nutrition.meals, newMeal];
+        updatedTotals = existing.nutrition.totals || updatedTotals;
+      } else {
+        updatedMeals = [newMeal];
+      }
+
+      for (const item of payload.items) {
+        updatedTotals.calories += item.calories || 0;
+        updatedTotals.protein += item.protein || 0;
+        updatedTotals.carbs += item.carbs || 0;
+        updatedTotals.fat += item.fat || 0;
+      }
+
+      const nutrition = {
+        meals: updatedMeals,
+        totals: updatedTotals
+      };
+
+      if (existing) {
+        const { error: updateError } = await supabase
+          .from('summaries')
+          .update({ nutrition })
+          .eq('date', payload.date);
+
+        if (updateError) throw updateError;
+
+        return res.status(200).json({ message: 'Meal added and totals updated' });
+      } else {
+        const { error: insertError } = await supabase.from('summaries').insert([
+          {
+            date: payload.date,
+            workouts: [],
+            sleep: {},
+            nutrition
+          }
+        ]);
+
+        if (insertError) throw insertError;
+
+        return res.status(200).json({ message: 'Meal added in new summary' });
+      }
+    } catch (e) {
+      return res.status(500).json({ error: 'Insert/update failed', details: e.message });
     }
-
-    return res.status(200).json(data);
-  } catch (e) {
-    return res.status(500).json({ error: 'Supabase query failed', details: e.message });
   }
+
+  return res.status(405).json({ error: 'Method not allowed' });
 }
