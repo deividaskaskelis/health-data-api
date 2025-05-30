@@ -1,5 +1,3 @@
-// failas: api/index.js
-
 let lastSummary = null;
 
 export default async function handler(req, res) {
@@ -41,14 +39,30 @@ export default async function handler(req, res) {
     const sleepSessions = data?.data?.sleep_analysis || [];
     const totalSleepMinutes = sleepSessions.reduce((sum, s) => sum + (s.value || 0), 0);
     result.sleep.totalMinutes = totalSleepMinutes;
+
+    // 🔽 SUPABASE INSERT
+    await fetch('https://YOUR_PROJECT_ID.supabase.co/rest/v1/summaries', {
+      method: 'POST',
+      headers: {
+        'apikey': process.env.SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify({
+        date: result.date,
+        workouts: result.workouts,
+        nutrition: result.nutrition,
+        sleep: result.sleep,
+      }),
+    });
+
   } catch (e) {
-    return res.status(500).json({ error: 'Failed to parse health data', details: e.message });
+    return res.status(500).json({ error: 'Failed to parse or insert health data', details: e.message });
   }
 
-  console.log('✅ Gauti duomenys:', JSON.stringify(data, null, 2));
-
   lastSummary = result;
-  return res.status(200).json({ message: '✅ JSON gautas!', parsed: result });
+  return res.status(200).json({ message: '✅ JSON gautas ir įrašytas į DB', parsed: result });
 }
 
 export async function getLastSummary(req, res) {
