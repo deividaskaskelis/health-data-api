@@ -35,7 +35,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing date, meal or items' });
     }
 
-    const safeDate = payload.date.slice(0, 10); // apkarpom, kad būtų YYYY-MM-DD
+    const safeDate = payload.date.slice(0, 10);
 
     try {
       const { data: existing, error: selectError } = await supabase
@@ -77,6 +77,11 @@ export default async function handler(req, res) {
       };
 
       if (existing) {
+        // 🔍 Debug info
+        console.log('✅ Updating summary for date:', safeDate);
+        console.log('Current existing:', JSON.stringify(existing, null, 2));
+        console.log('Nutrition object to update:', JSON.stringify(nutrition, null, 2));
+
         const { error: updateError } = await supabase
           .from('summaries')
           .update({ nutrition })
@@ -100,6 +105,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ message: 'Meal added in new summary' });
       }
     } catch (e) {
+      console.error('❌ Error:', e.message);
       return res.status(500).json({ error: 'Insert/update failed', details: e.message });
     }
   }
