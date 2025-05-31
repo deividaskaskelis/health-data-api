@@ -1,9 +1,17 @@
+// pages/api/summaries.js
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Only POST allowed' });
   }
 
-  const payload = req.body?.data || req.body; // palaiko abu variantus (su .data arba be jos)
+  const payload = req.body?.data || req.body;
   if (!payload || !payload.date) {
     return res.status(400).json({ error: 'Missing date' });
   }
@@ -11,7 +19,6 @@ export default async function handler(req, res) {
   const safeDate = payload.date.slice(0, 10);
 
   try {
-    // Paieška – ar jau yra tokia data
     let { data: existing, error: selectError } = await supabase
       .from('summaries')
       .select('*')
@@ -20,15 +27,19 @@ export default async function handler(req, res) {
 
     if (selectError && selectError.code !== 'PGRST116') throw selectError;
 
-    // Paruošiame naują įrašą/arba atnaujinimus
+    // Paruošiame naujus laukus įrašui/arba atnaujinimui
     const updateObj = {};
-    if (payload.sleep) updateObj.sleep = payload.sleep;
+
+    // Workout
     if (payload.workouts) updateObj.workouts = payload.workouts;
+
+    // Sleep
+    if (payload.sleep) updateObj.sleep = payload.sleep;
+
+    // Maistas kaip anksčiau (tik jei yra meal ir items)
     if (payload.meal && payload.items) {
-      // Maistas kaip tavo senajame kode
-      if (!existing) existing = {};
-      let meals = existing.nutrition?.meals || [];
-      let totals = existing.nutrition?.totals || {calories:0,protein:0,carbs:0,fat:0};
+      let meals = existing?.nutrition?.meals || [];
+      let totals = existing?.nutrition?.totals || {calories:0,protein:0,carbs:0,fat:0};
       const newMeal = { name: payload.meal, items: payload.items };
       meals = [...meals, newMeal];
       for (const item of payload.items) {
@@ -40,11 +51,13 @@ export default async function handler(req, res) {
       updateObj.nutrition = { meals, totals };
     }
 
+    // Jei nėra nei workouts, nei sleep, nei meal+items – nieko neatnaujina!
+    if (Object.keys(updateObj).length === 0) {
+      return res.status(400).json({ error: 'No valid data provided.' });
+    }
+
     if (existing) {
       // UPDATE
-      if (Object.keys(updateObj).length === 0) {
-        return res.status(400).json({ error: 'Nothing to update.' });
-      }
       const { error: updateError } = await supabase
         .from('summaries')
         .update(updateObj)
